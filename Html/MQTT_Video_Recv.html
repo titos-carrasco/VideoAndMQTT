@@ -1,0 +1,77 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+<title>Video con WS, NodeRed y MQTT</title>
+<script type="text/javascript">
+    var uris = [
+        "ws://localhost:1880/ws/video1",
+        "ws://localhost:1880/ws/video2",
+        "ws://localhost:1880/ws/video3",
+    ]
+    var wss = []
+
+    function ws_onmessage( ws, msg ) {
+        var reader = new FileReader();
+            reader.readAsDataURL( msg.data );
+            reader.onloadend = function() {
+                base64data = reader.result;
+                myimg = document.getElementById( "imagen" + ws.myIdx )
+                myimg.src = base64data
+        }
+    }
+
+    function ws_onopen( ws ) {
+        console.log( "Conectado: ", ws );
+    }
+
+    function ws_onclose( ws ) {
+        console.log( "Desconectado" );
+    }
+
+    function wsConnect() {
+        for( i=0; i<uris.length; i++ ) {
+            ws = null;
+            try {
+                ws = new WebSocket( uris[i] );
+            }
+            catch( e ) {
+                console.log( "Error al conectar con " + uris[i] )
+            }
+            wss[i] = ws
+            if( ws == null )
+                continue
+            ws.myIdx = i;
+
+            ws.onopen = function() {
+                ws_onopen( this );
+            }
+
+            ws.onmessage = function( msg ) {
+                ws_onmessage( this, msg )
+            }
+
+            ws.onclose = function() {
+                ws_onclose( this )
+            }
+        }
+    }
+
+    function wsDisconnect() {
+        for( i=0; i<uris.length; i++ ) {
+            ws = wss[i];
+            if( ws != null )
+                ws.disconnect()
+        }
+    }
+
+</script>
+</head>
+<body onload="wsConnect();" onunload="wsDisconnect();">
+    <h1>Video con WS y MQTT</h1>
+    <div id="container">
+        <img id="imagen0" src="" width="320" height="240">
+        <img id="imagen1" src="" width="320" height="240">
+        <img id="imagen2" src="" width="320" height="240">
+    </div>
+</body>
+</html>
