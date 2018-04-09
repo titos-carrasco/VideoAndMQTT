@@ -1,18 +1,23 @@
 # coding: UTF-8
 import time
 import cv2
+import pysoundcard
 import numpy as np
 import paho.mqtt.client as paho
 import Queue
 
-IS_CV3 = ( cv2.__version__[0] == '3' )
 g_messages = Queue.Queue()
 
 # Configure here your connection parameters
 #
 MQTT_SERVER = "test.mosquitto.org"
 MQTT_PORT = 1883
-MQTT_TOPIC = "rcr/video"
+MQTT_TOPIC = "rcr/audio"
+
+AUDIO_FS = 11025
+AUDIO_FRAMES = 256
+AUDIO_CHANNELS = 1
+AUDIO_DTYPE = 'int16'
 #
 # End configuration
 
@@ -29,18 +34,7 @@ def mqtt_on_connect( client, arg1, arg2, arg3 ):
     client.subscribe( MQTT_TOPIC )
 
 def main():
-    global IS_CV3, MQTT_SERVER, MQTT_PORT, messages
-
-    # establecemos ventana y dimensiones
-    winName = 'Video In'
-    imgH,imgW = 240, 320
-    if( IS_CV3 ):
-        cv2.namedWindow( winName, cv2.WINDOW_AUTOSIZE )
-        LOAD_IMAGE_COLOR = cv2.IMREAD_COLOR
-    else:
-        cv2.namedWindow( winName, cv2.CV_WINDOW_AUTOSIZE )
-        LOAD_IMAGE_COLOR = cv2.CV_LOAD_IMAGE_COLOR
-    cv2.resizeWindow( winName, imgW, imgH )
+    global MQTT_SERVER, MQTT_PORT, AUDIO_FS, AUDIO_FRAMES, AUDIO_CHANNELS, AUDIO_DTYPE, g_messages
 
     # nos conectamos al servidor MQTT
     mqtt_client = paho.Client()
@@ -49,29 +43,34 @@ def main():
     mqtt_client.connect( MQTT_SERVER, MQTT_PORT )
     mqtt_client.loop_start()
 
-    # procesamos hasta que recibamos ESC
+    # el stream de audio
+    ostream = pysoundcard.OutputStream( samplerate=AUDIO_FS,
+                                        #blocksize=AUDIO_FRAMES,
+                                        channels=AUDIO_CHANNELS,
+                                        dtype=AUDIO_DTYPE )
+    ostream.start()
+
+    print
+    print "Presione CTRL-C para finalizar"
     while True:
         try:
-            # recibimos un frame
+            # recibimos un chunk
             message = g_messages.get_nowait()
-            data = np.fromstring( message.payload, np.uint8 )
-            frame = cv2.imdecode( data, LOAD_IMAGE_COLOR )
+            data = np.fromstring( message.payload, np.int16 )
 
-            # mostramos el frame
-            cv2.imshow( winName, frame )
+            # lo reproducimos
+            ostream.write( data )
         except Queue.Empty:
             pass
+        except KeyboardInterrupt:
+            break
         except Exception as e:
             print e
-
-        # verificamos si se presiona ESC
-        if( cv2.waitKey( 1 ) == 27 ):
-            break
+        time.sleep( 0.001 )
 
     # eso es todo
     mqtt_client.loop_stop()
-    cv2.destroyAllWindows()
-
+    ostream.stop()
 
 # Show time
 main()
