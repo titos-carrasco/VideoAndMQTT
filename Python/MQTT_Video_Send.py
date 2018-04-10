@@ -1,4 +1,5 @@
 # coding: UTF-8
+from __future__ import print_function
 import time
 import cv2
 import numpy as np
@@ -10,6 +11,10 @@ g_mutex = threading.Lock()
 g_frame = None
 g_running = False
 
+WIN_CAPTURE = "Capture"
+WIN_SEND = "Video Out"
+CTRL_FPS = "FPS"
+
 # Configure here your connection parameters
 #
 MQTT_SERVER = "test.mosquitto.org"
@@ -17,64 +22,73 @@ MQTT_PORT = 1883
 MQTT_TOPIC = "rcr/video"
 
 DEVICE = 0
-FPS = 10
 #
 # End configuration
 
-def _TSendVideoFrame( fps ):
-    global MQTT_SERVER, MQTT_PORT, MQTT_TOPIC, g_mutex, g_frame, g_running
+def _TSendVideoFrame():
+    global g_mutex, g_frame, g_running, WIN_CAPTURE, WIN_SEND, MQTT_SERVER, MQTT_PORT, MQTT_TOPIC
 
     mqtt_client = paho.Client()
     mqtt_client.connect( MQTT_SERVER, MQTT_PORT )
     mqtt_client.loop_start()
 
-    winName = "Debug"
-    cv2.namedWindow( winName, cv2.WINDOW_AUTOSIZE )
-
-    tf = 1./fps
     t1 = 0.
     while( g_running ):
-        g_mutex.acquire()
-        if( g_frame is not None ):
-            frame = np.copy( g_frame )
+        fps = cv2.getTrackbarPos( CTRL_FPS, WIN_SEND )
+        if( fps > 0 ):
+            g_mutex.acquire()
+            if( g_frame is not None ):
+                frame = np.copy( g_frame )
+            else:
+                frame = None
             g_mutex.release()
+            if( frame is not None ):
+                data = cv2.imencode( '.jpg', frame )[1].tostring()
+                mqtt_client.publish( MQTT_TOPIC, data )
 
-            data = cv2.imencode( '.jpg', frame )[1].tostring()
-            mqtt_client.publish( MQTT_TOPIC, data )
-
-            t2 = time.time()
-            dt = 1./( t2 - t1 )
-            cv2.putText( frame, "%03.1f FPS" % ( dt ), ( 10, 30 ), cv2.FONT_HERSHEY_SIMPLEX, 1, ( 255, 255, 255 ) )
-            cv2.imshow( winName, frame )
-            t1 = t2
-
+                t2 = time.time()
+                dt = 1./( t2 - t1 )
+                cv2.putText( frame, "%03.1f FPS" % ( dt ), ( 10, 30 ), cv2.FONT_HERSHEY_SIMPLEX, 1, ( 255, 255, 255 ) )
+                cv2.imshow( WIN_SEND, frame )
+                t1 = t2
+            tf = 1./fps
+            time.sleep( tf )
         else:
-            g_mutex.release()
-        time.sleep( tf )
+            frame[:] = 0
+            cv2.imshow( WIN_SEND, frame )
+            time.sleep( 0.001 )
     mqtt_client.loop_stop()
 
-def main( device, fps ):
-    global IS_CV3, g_mutex, g_frame, g_running
+def trackControls( obj ):
+    pass
+
+def main( device ):
+    global IS_CV3, g_mutex, g_frame, g_running, WIN_CAPTURE, WIN_SEND
 
     # abrimos dispositivo de captura
     cap = cv2.VideoCapture( device )
 
     # establecemos ventana y dimensiones de la captura
-    winName = 'Video Out'
     imgH,imgW = 240, 320
     if( IS_CV3 ):
-        cv2.namedWindow( winName, cv2.WINDOW_AUTOSIZE )
+        cv2.namedWindow( WIN_CAPTURE, cv2.WINDOW_NORMAL )
+        cv2.namedWindow( WIN_SEND, cv2.WINDOW_NORMAL )
         cap.set( cv2.CAP_PROP_FRAME_HEIGHT, imgH )
         cap.set( cv2.CAP_PROP_FRAME_WIDTH, imgW )
     else:
-        cv2.namedWindow( winName, cv2.CV_WINDOW_AUTOSIZE )
+        cv2.namedWindow( WIN_CAPTURE, cv2.CV_WINDOW_NORMAL )
+        cv2.namedWindow( WIN_SEND, cv2.CV_WINDOW_NORMAL )
         cap.set( cv2.cv.CV_CAP_PROP_FRAME_HEIGHT, imgH )
         cap.set( cv2.cv.CV_CAP_PROP_FRAME_WIDTH, imgW )
-    cv2.resizeWindow( winName, imgW, imgH )
+    cv2.resizeWindow( WIN_CAPTURE, imgW, imgH )
+    cv2.resizeWindow( WIN_SEND, imgW, imgH )
+
+    # creamos un trackbar para definir los FPS
+    cv2.createTrackbar( CTRL_FPS, WIN_SEND, 5, 30, trackControls )
 
     # levantamos tarea que envia el frame
     g_running = True
-    tSendVideoFrame = threading.Thread( target=_TSendVideoFrame, args=( fps, ), name="_TSendVideoFrame" )
+    tSendVideoFrame = threading.Thread( target=_TSendVideoFrame, args=(), name="_TSendVideoFrame" )
     tSendVideoFrame.start()
 
     # procesamos hasta que recibamos ESC
@@ -93,7 +107,7 @@ def main( device, fps ):
             t2 = time.time()
             dt = 1./( t2 - t1 )
             cv2.putText( frame, "%03.1f FPS" % ( dt ), ( 10, imgH-10 ), cv2.FONT_HERSHEY_SIMPLEX, 1, ( 255, 255, 255 ) )
-            cv2.imshow( winName, frame )
+            cv2.imshow( WIN_CAPTURE, frame )
             t1 = t2
 
         # verificamos si se presiona ESC
@@ -110,4 +124,4 @@ def main( device, fps ):
 
 
 # Show time
-main( DEVICE, FPS )
+main( DEVICE )
