@@ -1,4 +1,5 @@
 # coding: UTF-8
+from __future__ import print_function
 import time
 import cv2
 import numpy as np
@@ -7,6 +8,8 @@ import Queue
 
 IS_CV3 = ( cv2.__version__[0] == '3' )
 g_messages = Queue.Queue()
+
+WIN_CAPTURE = "Video In"
 
 # Configure here your connection parameters
 #
@@ -29,18 +32,17 @@ def mqtt_on_connect( client, arg1, arg2, arg3 ):
     client.subscribe( MQTT_TOPIC )
 
 def main():
-    global IS_CV3, MQTT_SERVER, MQTT_PORT, messages
+    global IS_CV3, g_messages, WIN_CAPTURE, MQTT_SERVER, MQTT_PORT
 
     # establecemos ventana y dimensiones
-    winName = 'Video In'
     imgH,imgW = 240, 320
     if( IS_CV3 ):
-        cv2.namedWindow( winName, cv2.WINDOW_AUTOSIZE )
+        cv2.namedWindow( WIN_CAPTURE, cv2.WINDOW_AUTOSIZE )
         LOAD_IMAGE_COLOR = cv2.IMREAD_COLOR
     else:
-        cv2.namedWindow( winName, cv2.CV_WINDOW_AUTOSIZE )
+        cv2.namedWindow( WIN_CAPTURE, cv2.CV_WINDOW_AUTOSIZE )
         LOAD_IMAGE_COLOR = cv2.CV_LOAD_IMAGE_COLOR
-    cv2.resizeWindow( winName, imgW, imgH )
+    cv2.resizeWindow( WIN_CAPTURE, imgW, imgH )
 
     # nos conectamos al servidor MQTT
     mqtt_client = paho.Client()
@@ -58,11 +60,11 @@ def main():
             frame = cv2.imdecode( data, LOAD_IMAGE_COLOR )
 
             # mostramos el frame
-            cv2.imshow( winName, frame )
+            cv2.imshow( WIN_CAPTURE, frame )
         except Queue.Empty:
             pass
         except Exception as e:
-            print e
+            print( e )
 
         # verificamos si se presiona ESC
         if( cv2.waitKey( 1 ) == 27 ):
