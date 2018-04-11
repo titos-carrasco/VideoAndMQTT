@@ -6,122 +6,167 @@ import numpy as np
 import paho.mqtt.client as paho
 import threading
 
-IS_CV3 = ( cv2.__version__[0] == '3' )
-g_mutex = threading.Lock()
-g_frame = None
-g_running = False
+import wx
+import wx.lib.newevent
+import MQTT_Video_Send_wx as wxMainFrame
 
-WIN_CAPTURE = "Capture"
-WIN_SEND = "Video Out"
-CTRL_FPS = "FPS"
+C_IS_CV3 = ( cv2.__version__[0] == '3' )
 
-# Configure here your connection parameters
-#
-MQTT_SERVER = "test.mosquitto.org"
-MQTT_PORT = 1883
-MQTT_TOPIC = "rcr/video"
+#### Cambiar aqui
+G_DEVICE = 0
+G_MQTT_SERVER = "test.mosquitto.org"
+G_MQTT_PORT = 1883
+G_MQTT_TOPIC = "rcr/video"
+####
 
-DEVICE = 0
-#
-# End configuration
+class MainApp( wx.App ):
+    def OnInit( self ):
+        # esto deberian poder ser cambiados en la GUI
+        self.DEVICE = G_DEVICE
+        self.MQTT_SERVER = G_MQTT_SERVER
+        self.MQTT_PORT = G_MQTT_PORT
+        self.MQTT_TOPIC = G_MQTT_TOPIC
 
-def _TSendVideoFrame():
-    global g_mutex, g_frame, g_running, WIN_CAPTURE, WIN_SEND, MQTT_SERVER, MQTT_PORT, MQTT_TOPIC
+        # algunas definiciones
+        self.mutex = threading.Lock()
+        self.running = False
+        self.vframe = None
 
-    mqtt_client = paho.Client()
-    mqtt_client.connect( MQTT_SERVER, MQTT_PORT )
-    mqtt_client.loop_start()
+        # operaciones GUI en el thread principal
+        self.evtShowImage, EVT_SHOW_IMAGE = wx.lib.newevent.NewEvent()
+        self.Bind( EVT_SHOW_IMAGE, self._UpdateImage )
 
-    t1 = 0.
-    while( g_running ):
-        fps = cv2.getTrackbarPos( CTRL_FPS, WIN_SEND )
-        if( fps > 0 ):
-            g_mutex.acquire()
-            if( g_frame is not None ):
-                frame = np.copy( g_frame )
-            else:
-                frame = None
-            g_mutex.release()
-            if( frame is not None ):
-                data = cv2.imencode( '.jpg', frame )[1].tostring()
-                mqtt_client.publish( MQTT_TOPIC, data )
+        # levantamos la GUI
+        self.mainFrame = wxMainFrame.MainFrame( parent=None )
+        self.mainFrame.SetDoubleBuffered( True )
+        self.mainFrame.Bind( wx.EVT_CLOSE, self.OnClose )
+        self.mainFrame.Bind( wx.EVT_MENU, self.OnSalir, id=wxMainFrame.ID_SALIR )
+        self.mainFrame.Send.Bind( wx.EVT_TOGGLEBUTTON, self.OnSend )
+        self.mainFrame.Show()
 
-                t2 = time.time()
-                dt = 1./( t2 - t1 )
-                cv2.putText( frame, "%03.1f FPS" % ( dt ), ( 10, 30 ), cv2.FONT_HERSHEY_SIMPLEX, 1, ( 255, 255, 255 ) )
-                cv2.imshow( WIN_SEND, frame )
-                t1 = t2
-            tf = 1./fps
-            time.sleep( tf )
+        # levantamos las tareas
+        self.running = True
+        self.tCaptureVideo = threading.Thread( target=self._TCaptureVideo, args=(), name="_TCaptureVideo" )
+        self.tSendVideo = threading.Thread( target=self._TSendVideo, args=( ), name="_TSendVideo" )
+        self.tCaptureVideo.start()
+        self.tSendVideo.start()
+
+        return True
+
+    def OnSalir( self, event ):
+        self.mainFrame.Close()
+
+    def OnClose( self, event ):
+        # terminamos las tareas
+        self.running = False
+        self.tCaptureVideo.join()
+        self.tSendVideo.join()
+
+        # propagamos la salida
+        event.Skip()
+
+    def OnSend( self, event ):
+        obj = event.GetEventObject()
+        if( obj.GetValue() ):
+            obj.SetLabel( 'Pausar' )
         else:
-            frame[:] = 0
-            cv2.imshow( WIN_SEND, frame )
+            obj.SetLabel( 'Transmitir' )
+
+    def _TCaptureVideo( self ):
+        # abrimos dispositivo de captura
+        cap = cv2.VideoCapture( self.DEVICE )
+
+        # dimensiones de la captura
+        imgH,imgW = 240, 320
+        if( C_IS_CV3 ):
+            cap.set( cv2.CAP_PROP_FRAME_HEIGHT, imgH )
+            cap.set( cv2.CAP_PROP_FRAME_WIDTH, imgW )
+        else:
+            cap.set( cv2.cv.CV_CAP_PROP_FRAME_HEIGHT, imgH )
+            cap.set( cv2.cv.CV_CAP_PROP_FRAME_WIDTH, imgW )
+
+        # iniciamos la captura
+        t1 = 0.
+        while( self.running ):
+            # 1. internamente hay un buffer que puede producir lags a bajos FPS
+            # 2. poca luz genera demoras en la decodificación
+            ret, img = cap.read()
+            if( ret ):
+                # lo dejamos disponible para la tarea que envia
+                self.mutex.acquire()
+                self.vframe = np.copy( img )
+                self.mutex.release()
+
+                # lo mostramos
+                t2 = time.time()
+                evt = self.evtShowImage( panel=self.mainFrame.CaptureImage, img=img, t1=t1, t2=t2 )
+                wx.PostEvent( self, evt )
+                t1 = t2
             time.sleep( 0.001 )
-    mqtt_client.loop_stop()
 
-def trackControls( obj ):
-    pass
+        # liberamos el dispositivo de captura
+        cap.release()
+        print( 'Cerrando Capture' )
 
-def main( device ):
-    global IS_CV3, g_mutex, g_frame, g_running, WIN_CAPTURE, WIN_SEND
+    def _TSendVideo( self ):
+        mqtt_client = paho.Client()
+        mqtt_client.connect( self.MQTT_SERVER, self.MQTT_PORT )
+        mqtt_client.loop_start()
 
-    # abrimos dispositivo de captura
-    cap = cv2.VideoCapture( device )
+        t1 = 0.
+        while( self.running ):
+            self.mutex.acquire()
+            img = self.vframe
+            self.mutex.release()
 
-    # establecemos ventana y dimensiones de la captura
-    imgH,imgW = 240, 320
-    if( IS_CV3 ):
-        cv2.namedWindow( WIN_CAPTURE, cv2.WINDOW_NORMAL )
-        cv2.namedWindow( WIN_SEND, cv2.WINDOW_NORMAL )
-        cap.set( cv2.CAP_PROP_FRAME_HEIGHT, imgH )
-        cap.set( cv2.CAP_PROP_FRAME_WIDTH, imgW )
-    else:
-        cv2.namedWindow( WIN_CAPTURE, cv2.CV_WINDOW_NORMAL )
-        cv2.namedWindow( WIN_SEND, cv2.CV_WINDOW_NORMAL )
-        cap.set( cv2.cv.CV_CAP_PROP_FRAME_HEIGHT, imgH )
-        cap.set( cv2.cv.CV_CAP_PROP_FRAME_WIDTH, imgW )
-    cv2.resizeWindow( WIN_CAPTURE, imgW, imgH )
-    cv2.resizeWindow( WIN_SEND, imgW, imgH )
-
-    # creamos un trackbar para definir los FPS
-    cv2.createTrackbar( CTRL_FPS, WIN_SEND, 5, 30, trackControls )
-
-    # levantamos tarea que envia el frame
-    g_running = True
-    tSendVideoFrame = threading.Thread( target=_TSendVideoFrame, args=(), name="_TSendVideoFrame" )
-    tSendVideoFrame.start()
-
-    # procesamos hasta que recibamos ESC
-    t1 = 0.
-    while True:
-        # internamente hay un buffer que puede producir lags a bajos FPS
-        # poca luz genera demoras en la decodificación
-        ret, frame = cap.read()
-        if( ret ):
-            # lo dejamos disponible para la tarea
-            g_mutex.acquire()
-            g_frame = np.copy( frame )
-            g_mutex.release()
-
-            # lo mostramos a la maxima velocidad de captura
+            cuadros = self.mainFrame.Cuadros.GetValue()
+            segundos = self.mainFrame.Segundos.GetValue()
+            delay = float(segundos)/float(cuadros)
             t2 = time.time()
-            dt = 1./( t2 - t1 )
-            cv2.putText( frame, "%03.1f FPS" % ( dt ), ( 10, imgH-10 ), cv2.FONT_HERSHEY_SIMPLEX, 1, ( 255, 255, 255 ) )
-            cv2.imshow( WIN_CAPTURE, frame )
-            t1 = t2
+            if( self.mainFrame.Send.GetValue() and img is not None and t2-t1>=delay ):
+                # lo enviamos
+                data = cv2.imencode( '.jpg', img )[1].tostring()
+                mqtt_client.publish( self.MQTT_TOPIC, data )
 
-        # verificamos si se presiona ESC
-        if( cv2.waitKey( 1 ) == 27 ):
-            break
+                # lo mostramos
+                evt = self.evtShowImage( panel=self.mainFrame.SendImage, img=img, t1=t1, t2=t2 )
+                wx.PostEvent( self, evt )
+                t1 = t2
+            time.sleep( 0.001 )
 
-    # finalizamos las tareas
-    g_running = False
-    tSendVideoFrame.join()
+        # cerramos la conexion
+        mqtt_client.loop_stop()
+        print( 'Cerrando Send' )
 
-    # liberamos cv2
-    cap.release()
-    cv2.destroyAllWindows()
+    def _UpdateImage( self, evt ):
+        # los parametros
+        panel = evt.panel
+        img = evt.img
+        t1 = evt.t1
+        t2 = evt.t2
+
+        # el tamano de la imagen
+        imgH, imgW = img.shape[:2]
+
+        # agregamos los FPS
+        dt = 1./( t2 - t1 )
+        cv2.putText( img, "%03.1f FPS" % ( dt ), ( 10, imgH-10 ), cv2.FONT_HERSHEY_SIMPLEX, 1, ( 255, 255, 255 ) )
+        t1 = t2
+
+        # la mostramos ajustado a la ventana
+        if( C_IS_CV3 ):
+            img = cv2.cvtColor( img, cv2.COLOR_BGR2RGB )
+        else:
+            img = cv2.cvtColor( img, cv2.cv.CV_BGR2RGB )
+        w, h = panel.Size
+        if( w>0 and h>0 ):
+            img = cv2.resize( img, (w, h) )
+            bmp = wx.BitmapFromBuffer( w, h, img )
+            dc = wx.ClientDC( panel )
+            dc.DrawBitmap( bmp, 0, 0 )
+            dc = None
 
 
 # Show time
-main( DEVICE )
+myApp = MainApp( False )
+myApp.MainLoop()
