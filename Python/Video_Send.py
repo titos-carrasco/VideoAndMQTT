@@ -8,12 +8,14 @@ import threading
 
 import wx
 import wx.lib.newevent
-import MQTT_Video_Send_wx as wxMainFrame
+import Video_Send_wx as wxMainFrame
 
 C_IS_CV3 = ( cv2.__version__[0] == '3' )
 
 #### Cambiar aqui
 G_DEVICE = 0
+G_WIDTH = 320
+G_HEIGHT = 240
 G_MQTT_SERVER = "test.mosquitto.org"
 G_MQTT_PORT = 1883
 G_MQTT_TOPIC = "rcr/video"
@@ -23,6 +25,8 @@ class MainApp( wx.App ):
     def OnInit( self ):
         # esto deberian poder ser cambiados en la GUI
         self.DEVICE = G_DEVICE
+        self.imgW = G_WIDTH
+        self.imgH = G_HEIGHT
         self.MQTT_SERVER = G_MQTT_SERVER
         self.MQTT_PORT = G_MQTT_PORT
         self.MQTT_TOPIC = G_MQTT_TOPIC
@@ -77,13 +81,12 @@ class MainApp( wx.App ):
         cap = cv2.VideoCapture( self.DEVICE )
 
         # dimensiones de la captura
-        imgH,imgW = 240, 320
         if( C_IS_CV3 ):
-            cap.set( cv2.CAP_PROP_FRAME_HEIGHT, imgH )
-            cap.set( cv2.CAP_PROP_FRAME_WIDTH, imgW )
+            cap.set( cv2.CAP_PROP_FRAME_HEIGHT, self.imgH )
+            cap.set( cv2.CAP_PROP_FRAME_WIDTH, self.imgW )
         else:
-            cap.set( cv2.cv.CV_CAP_PROP_FRAME_HEIGHT, imgH )
-            cap.set( cv2.cv.CV_CAP_PROP_FRAME_WIDTH, imgW )
+            cap.set( cv2.cv.CV_CAP_PROP_FRAME_HEIGHT, self.imgH )
+            cap.set( cv2.cv.CV_CAP_PROP_FRAME_WIDTH, self.imgW )
 
         # iniciamos la captura
         t1 = 0.
@@ -94,12 +97,12 @@ class MainApp( wx.App ):
             if( ret ):
                 # lo dejamos disponible para la tarea que envia
                 self.mutex.acquire()
-                self.vframe = np.copy( img )
+                self.vframe = img.copy()
                 self.mutex.release()
 
                 # lo mostramos
                 t2 = time.time()
-                evt = self.evtShowImage( panel=self.mainFrame.CaptureImage, img=img, t1=t1, t2=t2 )
+                evt = self.evtShowImage( panel=self.mainFrame.CaptureImage, img=img, fps=1./(t2-t1))
                 wx.PostEvent( self, evt )
                 t1 = t2
             time.sleep( 0.001 )
@@ -115,23 +118,25 @@ class MainApp( wx.App ):
 
         t1 = 0.
         while( self.running ):
-            self.mutex.acquire()
-            img = self.vframe
-            self.mutex.release()
+            if( self.mainFrame.Send.GetValue() ):
+                cuadros = self.mainFrame.Cuadros.GetValue()
+                segundos = self.mainFrame.Segundos.GetValue()
+                delay = float(segundos)/float(cuadros)
+                t2 = time.time()
+                if( t2-t1>=delay ):
+                    self.mutex.acquire()
+                    img = self.vframe
+                    self.mutex.release()
 
-            cuadros = self.mainFrame.Cuadros.GetValue()
-            segundos = self.mainFrame.Segundos.GetValue()
-            delay = float(segundos)/float(cuadros)
-            t2 = time.time()
-            if( self.mainFrame.Send.GetValue() and img is not None and t2-t1>=delay ):
-                # lo enviamos
-                data = cv2.imencode( '.jpg', img )[1].tostring()
-                mqtt_client.publish( self.MQTT_TOPIC, data )
+                    if( img is not None ):
+                        # lo enviamos
+                        data = cv2.imencode( '.jpg', img )[1].tostring()
+                        mqtt_client.publish( self.MQTT_TOPIC, data )
 
-                # lo mostramos
-                evt = self.evtShowImage( panel=self.mainFrame.SendImage, img=img, t1=t1, t2=t2 )
-                wx.PostEvent( self, evt )
-                t1 = t2
+                        # lo mostramos
+                        evt = self.evtShowImage( panel=self.mainFrame.SendImage, img=img.copy(), fps=1./(t2-t1) )
+                        wx.PostEvent( self, evt )
+                        t1 = t2
             time.sleep( 0.001 )
 
         # cerramos la conexion
@@ -142,16 +147,13 @@ class MainApp( wx.App ):
         # los parametros
         panel = evt.panel
         img = evt.img
-        t1 = evt.t1
-        t2 = evt.t2
+        fps = evt.fps
 
         # el tamano de la imagen
         imgH, imgW = img.shape[:2]
 
         # agregamos los FPS
-        dt = 1./( t2 - t1 )
-        cv2.putText( img, "%03.1f FPS" % ( dt ), ( 10, imgH-10 ), cv2.FONT_HERSHEY_SIMPLEX, 1, ( 255, 255, 255 ) )
-        t1 = t2
+        cv2.putText( img, "%03.1f FPS" % ( fps ), ( 10, imgH-10 ), cv2.FONT_HERSHEY_SIMPLEX, 1, ( 255, 255, 255 ) )
 
         # la mostramos ajustado a la ventana
         if( C_IS_CV3 ):

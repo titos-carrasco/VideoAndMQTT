@@ -46,7 +46,7 @@ class MainFrame ( wx.Frame ):
 		self.Cuadros = wx.SpinCtrl( self, wx.ID_ANY, u"5", wx.DefaultPosition, wx.Size( -1,-1 ), wx.SP_ARROW_KEYS|wx.SIMPLE_BORDER, 1, 30, 5 )
 		bSizer6.Add( self.Cuadros, 0, wx.ALL, 5 )
 		
-		self.m_staticText3 = wx.StaticText( self, wx.ID_ANY, u"Cuadros en", wx.DefaultPosition, wx.DefaultSize, wx.ALIGN_CENTRE )
+		self.m_staticText3 = wx.StaticText( self, wx.ID_ANY, u"Cuadro(s) en", wx.DefaultPosition, wx.DefaultSize, wx.ALIGN_CENTRE )
 		self.m_staticText3.Wrap( -1 )
 		bSizer6.Add( self.m_staticText3, 0, wx.ALL|wx.EXPAND, 5 )
 		
@@ -85,7 +85,6 @@ class MainFrame ( wx.Frame ):
 		self.SetSizer( bSizer1 )
 		self.Layout()
 		bSizer1.Fit( self )
-		self.m_statusBar1 = self.CreateStatusBar( 1, 0, wx.ID_ANY )
 		
 		self.Centre( wx.BOTH )
 	

@@ -9,7 +9,7 @@ import Queue
 
 import wx
 import wx.lib.newevent
-import MQTT_Video_Recv_wx as wxMainFrame
+import Video_Recv_wx as wxMainFrame
 
 C_IS_CV3 = ( cv2.__version__[0] == '3' )
 
@@ -77,7 +77,6 @@ class MainApp( wx.App ):
         else:
             LOAD_IMAGE_COLOR = cv2.CV_LOAD_IMAGE_COLOR
 
-        t1 = 0.
         while( self.running ):
             try:
                 # recibimos un frame de video
@@ -86,17 +85,14 @@ class MainApp( wx.App ):
                 img = cv2.imdecode( data, LOAD_IMAGE_COLOR )
 
                 # lo mostramos
-                t2 = time.time()
-                evt = self.evtShowImage( panel=self.mainFrame.RecvImage, img=img, t1=t1, t2=t2 )
+                evt = self.evtShowImage( panel=self.mainFrame.RecvImage, img=img )
                 wx.PostEvent( self, evt )
-                t1 = t2
             except Queue.Empty:
                 pass
             except Exception as e:
                 print( e )
 
-            wx.MilliSleep( 1 )
-            #time.sleep( 0.001 )
+            time.sleep( 0.001 )
 
         # cerramos la conexion
         mqtt_client.loop_stop()
@@ -106,16 +102,9 @@ class MainApp( wx.App ):
         # los parametros
         panel = evt.panel
         img = evt.img
-        t1 = evt.t1
-        t2 = evt.t2
 
         # el tamano de la imagen
         imgH, imgW = img.shape[:2]
-
-        # agregamos los FPS
-        dt = 1./( t2 - t1 )
-        cv2.putText( img, "%03.1f FPS" % ( dt ), ( 10, imgH-10 ), cv2.FONT_HERSHEY_SIMPLEX, 1, ( 255, 255, 255 ) )
-        t1 = t2
 
         # la mostramos ajustado a la ventana
         if( C_IS_CV3 ):
