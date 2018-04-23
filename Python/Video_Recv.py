@@ -13,9 +13,11 @@ import Video_Recv_wx as wxMainFrame
 
 G_IS_CV3 = ( cv2.__version__[0] == '3' )
 if( G_IS_CV3 ):
-    G_LOAD_IMAGE_COLOR = cv2.IMREAD_COLOR
+    G_IMREAD_COLOR = cv2.IMREAD_COLOR
+    G_COLOR_BGR2RGB = cv2.COLOR_BGR2RGB
 else:
-    G_LOAD_IMAGE_COLOR = cv2.CV_LOAD_IMAGE_COLOR
+    G_IMREAD_COLOR = cv2.CV_LOAD_IMAGE_COLOR
+    G_COLOR_BGR2RGB = cv2.cv.CV_BGR2RGB
 
 class MainApp( wx.App ):
     def OnInit( self ):
@@ -61,8 +63,8 @@ class MainApp( wx.App ):
 
     def OnAction( self, event ):
         btnAction = event.GetEventObject()
-        transmit = btnAction.GetValue()
-        if( transmit ):
+        receive = btnAction.GetValue()
+        if( receive ):
             self.mainFrame.StatusBar.SetStatusText( '', 0 )
             self.mainFrame.Server.Disable()
             self.mainFrame.Port.Disable()
@@ -73,7 +75,7 @@ class MainApp( wx.App ):
             self.MQTT_PORT = self.mainFrame.Port.GetValue()
             self.MQTT_TOPIC = self.mainFrame.Topic.GetValue()
             try:
-                self.mqtt_client.connect( self.MQTT_SERVER, int(self.MQTT_PORT) )
+                self.mqtt_client.connect( self.MQTT_SERVER, int( self.MQTT_PORT ) )
                 btnAction.SetLabel( 'Detener' )
                 btnAction.Enable()
                 self.mqtt_client.loop_start()
@@ -81,6 +83,7 @@ class MainApp( wx.App ):
             except Exception as e:
                 self.mainFrame.StatusBar.SetStatusText( str( e ), 0 )
                 btnAction.SetValue( False )
+                btnAction.Enable()
 
         self.mqtt_client.loop_stop()
         self.mqtt_client.disconnect()
@@ -88,7 +91,6 @@ class MainApp( wx.App ):
         self.mainFrame.Server.Enable()
         self.mainFrame.Port.Enable()
         self.mainFrame.Topic.Enable()
-        btnAction.Enable()
         btnAction.SetLabel( 'Iniciar' )
 
     def _mqtt_on_message( self, client, userdata, message ):
@@ -101,38 +103,35 @@ class MainApp( wx.App ):
         try:
             client.subscribe( self.MQTT_TOPIC )
         except Exception as e:
-            self.mainFrame.StatusBar.SetStatusText( str( e ), 0 )
+            wx.CallAfter( self.mainFrame.StatusBar.SetStatusText, str( e ), 0 )
 
     def _UpdateImage( self, evt ):
         self.mutex.acquire()
         img = self.image
+        self.image = None
         self.mutex.release()
         if( img is None ):
             return
 
-        # la procesamos
-        data = np.fromstring( img, np.uint8 )
-        img = cv2.imdecode( data, G_LOAD_IMAGE_COLOR )
+        try:
+            # la procesamos
+            data = np.fromstring( img, np.uint8 )
+            img = cv2.imdecode( data, G_IMREAD_COLOR )
 
-        # donde desplegar
-        panel = self.mainFrame.RecvImage
+            # donde desplegar
+            panel = self.mainFrame.RecvImage
 
-        # el tamano de la imagen
-        #imgH, imgW = img.shape[:2]
-
-        # la mostramos ajustado a la ventana
-        if( G_IS_CV3 ):
-            img = cv2.cvtColor( img, cv2.COLOR_BGR2RGB )
-        else:
-            img = cv2.cvtColor( img, cv2.cv.CV_BGR2RGB )
-        w, h = panel.Size
-        if( w>0 and h>0 ):
-            img = cv2.resize( img, (w, h) )
-            bmp = wx.Bitmap.FromBuffer( w, h, img )
-            dc = wx.ClientDC( panel )
-            dc.DrawBitmap( bmp, 0, 0 )
-            dc = None
-
+            # la mostramos ajustado a la ventana
+            img = cv2.cvtColor( img, G_COLOR_BGR2RGB )
+            w, h = panel.Size
+            if( w>0 and h>0 ):
+                img = cv2.resize( img, (w, h) )
+                bmp = wx.Bitmap.FromBuffer( w, h, img )
+                dc = wx.ClientDC( panel )
+                dc.DrawBitmap( bmp, 0, 0 )
+                del dc
+        except Exception as e:
+            pass
 
 # Show time
 myApp = MainApp( False )

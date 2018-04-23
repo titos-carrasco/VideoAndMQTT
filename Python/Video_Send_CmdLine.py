@@ -6,16 +6,22 @@ import numpy as np
 import paho.mqtt.client as paho
 
 G_IS_CV3 = ( cv2.__version__[0] == '3' )
+if( G_IS_CV3 ):
+    G_IMWRITE_JPEG_QUALITY = cv2.IMWRITE_JPEG_QUALITY
+else:
+    G_IMWRITE_JPEG_QUALITY = cv2.cv.CV_IMWRITE_JPEG_QUALITY
 
 #### Cambiar aqui
 G_DEVICE = 0
 G_WIDTH = 320
 G_HEIGHT = 240
-G_FPS = 10
-#G_MQTT_SERVER = "iot.eclipse.org"
+
 G_MQTT_SERVER = "test.mosquitto.org"
 G_MQTT_PORT = 1883
 G_MQTT_TOPIC = "rcr/video"
+
+G_FPS = 10
+G_JPEG_QUALITY = 30
 ####
 
 def main():
@@ -37,7 +43,7 @@ def main():
     # iniciamos la captura
     print( 'Iniciando captura y envio. Presione Ctrl-C para abortar' )
     delay = 1./G_FPS
-    t1 = time.time()
+    t1 = 0.
     while( True ):
         try:
             # 1. se captura rapido pues internamente hay un buffer que puede producir lags a bajos FPS
@@ -46,7 +52,7 @@ def main():
             if( ret ):
                 t2 = time.time()
                 if( ( t2 - t1 ) >= delay ):
-                    data = cv2.imencode( '.jpg', img )[1].tostring()
+                    data = cv2.imencode( '.jpg', img, ( G_IMWRITE_JPEG_QUALITY, G_JPEG_QUALITY ) )[1].tostring()
                     mqtt_client.publish( G_MQTT_TOPIC, data )
                     t1 = t2
         except KeyboardInterrupt:
