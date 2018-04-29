@@ -1,18 +1,20 @@
 # VideoAndMQTT
-Use MQTT to send and receive audio/video
+Use MQTT to send and receive audio/video from python3 using OpenCV and wxPython
 
 * Html/:
-    * MQTT_Video_Recv.html; html/javascript to show video frames received via websockets
+    * Video_Recv_Paho.html; html/javascript to show video frames received via websockets using the PAHO library
+    * Video_Recv_ws.html; html/javascript to show video frames received via websockets running in Node-Red bridge
 * NodeRed/:
-  * MQTT_WSocket_NodeRed.flow; flow to get video frames from an MQTT broker and send it using websockets
-* Python/: 
-  * MQTT_Video_Send.py; capture, display and send video frames
-  * MQTT_Video_Recv.py; receive and display video frames
-  * MQTT_Audio_Send.py; capture and send audio chunks
-  * MQTT_Audio_Recv.py; receive and play audio chunks
+  * WSocket_NodeRed.flow; flow to get video frames from an MQTT broker and send it using websockets
+* Python/:
+  * Video_Send.py; capture, display and send video frames using wxPyhton GUI
+  * Video_Recv.py; receive and display video frames using wxPython GUI
+  * Video_Send_CmdLine.py: capture and sebd video frames from command line
 
 To DO
-* Needs documentation
-* GUI 
-* Android APP
-* 
+* Android App
+* Audio modules
+
+# Screenshots
+
+![](Images/Screenshot.jpg)

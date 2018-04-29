@@ -1,0 +1,63 @@
+<!DOCTYPE html PUBLIC '-//W3C//DTD XHTML 1.0 Strict//EN' 'http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd'>
+<html xmlns='http://www.w3.org/1999/xhtml' xml:lang='es' lang='es'>
+<head>
+    <title>Video and WS/MQTT (paho lib)</title>
+    <meta http-equiv='content-type' content='text/html;charset=utf-8' />
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js' type='text/javascript'></script>
+    <script type='text/javascript'>
+    // put here the mqtt connections parameters
+    var streams = [
+        [ "broker.hivemq.com", 8000, "/mqtt", "demos/rcr/video1", "rcr_" + createUUID() ],
+        [ "broker.hivemq.com", 8000, "/mqtt", "demos/rcr/video2", "rcr_" + createUUID() ],
+        [ "broker.hivemq.com", 8000, "/mqtt", "demos/rcr/video3", "rcr_" + createUUID() ],
+    ];
+
+    function createUUID() {
+        var s = [];
+        var hexDigits = "0123456789abcdef";
+        for (var i = 0; i < 36; i++) {
+            s[i] = hexDigits.substr(Math.floor(Math.random() * 0x10), 1);
+        }
+        s[14] = "4";  // bits 12-15 of the time_hi_and_version field to 0010
+        s[19] = hexDigits.substr((s[19] & 0x3) | 0x8, 1);  // bits 6-7 of the clock_seq_hi_and_reserved to 01
+        s[8] = s[13] = s[18] = s[23] = "-";
+
+        var uuid = s.join("");
+        return uuid;
+    }
+
+    function Connect(){
+        for( i=0; i<streams.length; i++ ){
+            img = document.createElement( 'img' );
+            img.width = "320";
+            img.height = "240";
+            img.src='';
+            img.id = 'image_' + i;
+            container = document.getElementById( 'container' );
+            container.appendChild( img );
+
+            stream = streams[i]
+            client = new Paho.MQTT.Client( stream[0],stream[1], stream[2], stream[4] );
+            client.idx = i
+
+            client.onMessageArrived = function ( message ){
+                data = message.payloadBytes;
+                img = document.getElementById( 'image_' + this.idx )
+                img.src = 'data:image/jpeg;base64,' +  btoa( String.fromCharCode.apply( null, data ) );
+            }.bind( client );
+
+            function onConnect(){
+                stream = streams[ this.idx ]
+                this.subscribe( stream[3] );
+            }
+
+            client.connect( { onSuccess: onConnect.bind( client ) } );
+        }
+    }
+</script>
+</head>
+<body onload='Connect();'>
+    <h1>Video and WS/MQTT (paho lib)</h1>
+    <div id='container'></div>
+</body>
+</html>

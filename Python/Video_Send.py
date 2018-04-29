@@ -127,7 +127,7 @@ class MainApp( wx.App ):
                 self.tx = True
                 return
             except Exception as e:
-                self.mainFrame.StatusBar.SetStatusText( str( e ), 0 )
+                self.mainFrame.StatusBar.SetStatusText( repr( e ), 0 )
                 btnSend.SetValue( False )
                 btnSend.Enable()
 
@@ -160,7 +160,7 @@ class MainApp( wx.App ):
             if( not ret ):
                 raise ValueError( 'Invalid Device Index' )
         except Exception as e:
-            wx.CallAfter( self.mainFrame.StatusBar.SetStatusText, str( e ), 0 )
+            wx.CallAfter( self.mainFrame.StatusBar.SetStatusText, repr( e ), 0 )
             return
 
         # dimensiones de la imagen
@@ -194,7 +194,7 @@ class MainApp( wx.App ):
                             self.mqtt_client.publish( self.MQTT_TOPIC, data.tostring() )
                         t1 = t2
             except Exception as e:
-                print( str( e ) )
+                print( repr( e ) )
             wx.CallAfter( self._getGuiParams )
             time.sleep( 0.010 )
 

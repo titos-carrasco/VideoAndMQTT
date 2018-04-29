@@ -66,7 +66,7 @@ class MainFrame ( wx.Frame ):
 		self.m_staticText31.Wrap( -1 )
 		fgSizer1.Add( self.m_staticText31, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALIGN_RIGHT, 5 )
 		
-		self.Server = wx.TextCtrl( self, wx.ID_ANY, u"test.mosquitto.org", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.Server = wx.TextCtrl( self, wx.ID_ANY, u"broker.hivemq.com", wx.DefaultPosition, wx.DefaultSize, 0 )
 		fgSizer1.Add( self.Server, 0, wx.EXPAND, 5 )
 		
 		self.m_staticText4 = wx.StaticText( self, wx.ID_ANY, u"Puerta:", wx.DefaultPosition, wx.DefaultSize, 0 )
@@ -80,7 +80,7 @@ class MainFrame ( wx.Frame ):
 		self.m_staticText5.Wrap( -1 )
 		fgSizer1.Add( self.m_staticText5, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALIGN_RIGHT, 5 )
 		
-		self.Topic = wx.TextCtrl( self, wx.ID_ANY, u"rcr/video", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.Topic = wx.TextCtrl( self, wx.ID_ANY, u"demos/rcr/video", wx.DefaultPosition, wx.DefaultSize, 0 )
 		fgSizer1.Add( self.Topic, 0, wx.EXPAND, 5 )
 		
 		

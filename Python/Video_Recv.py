@@ -81,7 +81,7 @@ class MainApp( wx.App ):
                 self.mqtt_client.loop_start()
                 return
             except Exception as e:
-                self.mainFrame.StatusBar.SetStatusText( str( e ), 0 )
+                self.mainFrame.StatusBar.SetStatusText( repr( e ), 0 )
                 btnAction.SetValue( False )
                 btnAction.Enable()
 
@@ -103,7 +103,7 @@ class MainApp( wx.App ):
         try:
             client.subscribe( self.MQTT_TOPIC )
         except Exception as e:
-            wx.CallAfter( self.mainFrame.StatusBar.SetStatusText, str( e ), 0 )
+            wx.CallAfter( self.mainFrame.StatusBar.SetStatusText, repr( e ), 0 )
 
     def _UpdateImage( self, evt ):
         self.mutex.acquire()
